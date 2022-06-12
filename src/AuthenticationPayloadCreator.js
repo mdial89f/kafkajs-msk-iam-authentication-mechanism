@@ -3,6 +3,7 @@ const { defaultProvider } = require('@aws-sdk/credential-provider-node')
 const { getDefaultRoleAssumerWithWebIdentity } = require('@aws-sdk/client-sts')
 const { createHash } = require('crypto')
 const { Sha256HashConstructor } = require('./Sha256Constructor')
+const { STSClient, AssumeRoleCommand } = require('@aws-sdk/client-sts');
 
 const SERVICE = 'kafka-cluster'
 const SIGNED_HEADERS = 'host'
@@ -11,13 +12,18 @@ const ALGORITHM = 'AWS4-HMAC-SHA256'
 const ACTION = 'kafka-cluster:Connect'
 
 class AuthenticationPayloadCreator {
-  constructor ({ region, ttl, userAgent }) {
+
+  constructor ({ region, ttl, userAgent, roleArn }) {
     this.region = region
     this.ttl = ttl || '900'
     this.userAgent = userAgent || 'MSK_IAM_v1.0.0'
-    this.provider = defaultProvider({
-      roleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity()
-    })
+    if(roleArn == null) {
+      this.provider = defaultProvider({
+        roleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity()
+      })
+    } else {
+      this.provider = this.getCreds(roleArn);
+    }
 
     this.signature = new SignatureV4({
       credentials: this.provider,
@@ -47,6 +53,8 @@ class AuthenticationPayloadCreator {
   }
 
   generateXAmzCredential (accessKeyId, dateString) {
+    console.log("MIEK")
+    console.log(accessKeyId)
     return `${accessKeyId}/${dateString}/${this.region}/${SERVICE}/aws4_request`
   }
 
@@ -82,13 +90,26 @@ ${createHash('sha256').update(canonicalRequest, 'utf8').digest('hex')}`
           hashedPayload
   };
 
+  async getCreds(roleArn) {
+    const stsclient = new STSClient();
+    var creds = await stsclient.send(
+      new AssumeRoleCommand({
+        RoleArn: roleArn,
+        RoleSessionName: "create-topics-sts"
+      })
+    );
+    creds.Credentials.accessKeyId = creds.Credentials.AccessKeyId
+    creds.Credentials.secretAccessKey = creds.Credentials.SecretAccessKey
+    creds.Credentials.sessionToken = creds.Credentials.SessionToken
+    return creds.Credentials
+  }
+
   // TESTED
   async create ({ brokerHost }) {
     if (!brokerHost) {
       throw new Error('Missing values')
     }
-
-    const { accessKeyId, sessionToken } = await this.provider()
+    var { accessKeyId, sessionToken } = await this.provider
 
     const now = Date.now()
 

@@ -29,7 +29,7 @@ const Mechanism = ({ sasl, connection, logger, saslAuthenticate }) => {
     authenticate: async () => {
       const { host, port } = connection
       const broker = `${host}:${port}`
-      const payloadFactory = new AuthenticationPayloadCreator({ region: sasl.region })
+      const payloadFactory = new AuthenticationPayloadCreator({ region: sasl.region, roleArn: sasl.roleArn })
 
       try {
         const payload = await payloadFactory.create({ brokerHost: host })

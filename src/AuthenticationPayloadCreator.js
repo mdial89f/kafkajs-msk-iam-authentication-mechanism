@@ -13,15 +13,17 @@ const ACTION = 'kafka-cluster:Connect'
 
 class AuthenticationPayloadCreator {
 
-  constructor ({ region, ttl, userAgent }) {
+  constructor ({ region, ttl, userAgent, roleArn }) {
     this.region = region
     this.ttl = ttl || '900'
     this.userAgent = userAgent || 'MSK_IAM_v1.0.0'
-    this.provider = this.getCreds();
-
-    // defaultProvider({
-    //   roleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity()
-    // })
+    if(roleArn == null) {
+      this.provider = defaultProvider({
+        roleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity()
+      })
+    } else {
+      this.provider = this.getCreds(roleArn);
+    }
 
     this.signature = new SignatureV4({
       credentials: this.provider,
@@ -88,12 +90,12 @@ ${createHash('sha256').update(canonicalRequest, 'utf8').digest('hex')}`
           hashedPayload
   };
 
-  async getCreds() {
+  async getCreds(roleArn) {
     const stsclient = new STSClient();
     var creds = await stsclient.send(
       new AssumeRoleCommand({
-        RoleArn: "arn:aws:iam::489462286305:role/piper-next-role-bravo",
-        RoleSessionName: "tryoneaaa"
+        RoleArn: roleArn,
+        RoleSessionName: "create-topics-sts"
       })
     );
     creds.Credentials.accessKeyId = creds.Credentials.AccessKeyId
@@ -107,17 +109,7 @@ ${createHash('sha256').update(canonicalRequest, 'utf8').digest('hex')}`
     if (!brokerHost) {
       throw new Error('Missing values')
     }
-    var heyo = await this.provider
-    var meyo = await this.getCreds()
-    console.log("---------------------")
-    console.log(heyo)
-    console.log("---------------------")
-    console.log(meyo)
-    console.log("---------------------")
-    console.log("LOOK")
     var { accessKeyId, sessionToken } = await this.provider
-    accessKeyId = heyo.accessKeyId
-    console.log(accessKeyId);
 
     const now = Date.now()
 

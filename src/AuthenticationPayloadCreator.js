@@ -1,9 +1,8 @@
 const { SignatureV4 } = require('@aws-sdk/signature-v4')
 const { defaultProvider } = require('@aws-sdk/credential-provider-node')
-const { getDefaultRoleAssumerWithWebIdentity } = require('@aws-sdk/client-sts')
+const { getDefaultRoleAssumerWithWebIdentity, STSClient, AssumeRoleCommand } = require('@aws-sdk/client-sts')
 const { createHash } = require('crypto')
 const { Sha256HashConstructor } = require('./Sha256Constructor')
-const { STSClient, AssumeRoleCommand } = require('@aws-sdk/client-sts');
 
 const SERVICE = 'kafka-cluster'
 const SIGNED_HEADERS = 'host'
@@ -12,7 +11,6 @@ const ALGORITHM = 'AWS4-HMAC-SHA256'
 const ACTION = 'kafka-cluster:Connect'
 
 class AuthenticationPayloadCreator {
-
   constructor ({ region, ttl, userAgent, roleArn }) {
     this.region = region
     this.ttl = ttl || '900'
@@ -53,8 +51,6 @@ class AuthenticationPayloadCreator {
   }
 
   generateXAmzCredential (accessKeyId, dateString) {
-    console.log("MIEK")
-    console.log(accessKeyId)
     return `${accessKeyId}/${dateString}/${this.region}/${SERVICE}/aws4_request`
   }
 
@@ -109,7 +105,7 @@ ${createHash('sha256').update(canonicalRequest, 'utf8').digest('hex')}`
     if (!brokerHost) {
       throw new Error('Missing values')
     }
-    var { accessKeyId, sessionToken } = await this.provider
+    const { accessKeyId, sessionToken } = await this.provider
 
     const now = Date.now()
 

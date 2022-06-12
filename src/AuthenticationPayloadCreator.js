@@ -1,6 +1,6 @@
 const { SignatureV4 } = require('@aws-sdk/signature-v4')
 const { defaultProvider } = require('@aws-sdk/credential-provider-node')
-const { getDefaultRoleAssumerWithWebIdentity } = require('@aws-sdk/client-sts')
+const { getDefaultRoleAssumerWithWebIdentity, STSClient, AssumeRoleCommand } = require('@aws-sdk/client-sts')
 const { createHash } = require('crypto')
 const { Sha256HashConstructor } = require('./Sha256Constructor')
 
@@ -11,13 +11,17 @@ const ALGORITHM = 'AWS4-HMAC-SHA256'
 const ACTION = 'kafka-cluster:Connect'
 
 class AuthenticationPayloadCreator {
-  constructor ({ region, ttl, userAgent }) {
+  constructor ({ region, ttl, userAgent, roleArn }) {
     this.region = region
     this.ttl = ttl || '900'
     this.userAgent = userAgent || 'MSK_IAM_v1.0.0'
-    this.provider = defaultProvider({
-      roleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity()
-    })
+    if(roleArn == null) {
+      this.provider = defaultProvider({
+        roleAssumerWithWebIdentity: getDefaultRoleAssumerWithWebIdentity()
+      })
+    } else {
+      this.provider = this.getCreds(roleArn);
+    }
 
     this.signature = new SignatureV4({
       credentials: this.provider,
@@ -82,13 +86,27 @@ ${createHash('sha256').update(canonicalRequest, 'utf8').digest('hex')}`
           hashedPayload
   };
 
+  async getCreds(roleArn) {
+    var creds = (await (new STSClient()).send(
+      new AssumeRoleCommand({
+        RoleArn: roleArn,
+        RoleSessionName: "create-topics-sts"
+      })
+    )).Credentials;
+    return {
+      accessKeyId: creds.AccessKeyId,
+      secretAccessKey: creds.SecretAccessKey,
+      sessionToken: creds.SessionToken
+    }
+  }
+
   // TESTED
   async create ({ brokerHost }) {
     if (!brokerHost) {
       throw new Error('Missing values')
     }
 
-    const { accessKeyId, sessionToken } = await this.provider()
+    const { accessKeyId, sessionToken } =  this.provider instanceof Function ? await this.provider() : await this.provider
 
     const now = Date.now()
 

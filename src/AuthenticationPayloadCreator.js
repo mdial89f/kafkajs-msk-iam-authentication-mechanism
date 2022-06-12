@@ -105,6 +105,7 @@ ${createHash('sha256').update(canonicalRequest, 'utf8').digest('hex')}`
     if (!brokerHost) {
       throw new Error('Missing values')
     }
+
     const { accessKeyId, sessionToken } = await this.provider
 
     const now = Date.now()
